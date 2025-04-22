@@ -4,27 +4,10 @@
 # Install dependencies as needed:
 # pip install kagglehub[pandas-datasets]
 import kagglehub
+import openpyxl
 import pandas as pd
 import os
 import glob
-
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut
-import time
-
-# Funktion zur sicheren Reverse-Geocodierung
-def get_zip_code(lat, lon):
-    try:
-        location = geolocator.reverse((lat, lon), language='en', timeout=10)
-        if location and "postcode" in location.raw["address"]:
-            return location.raw["address"]["postcode"]
-    except GeocoderTimedOut:
-        print(f"Timeout bei: {lat}, {lon}")
-        return None
-    return None
-
-# Geolocator initialisieren
-geolocator = Nominatim(user_agent="zip_finder")
 
 def fill_primary_categories(row):
     if pd.isna(row['primaryCategories']) or str(row['primaryCategories']).strip() == '':
@@ -70,30 +53,15 @@ merged_df = pd.concat([df2, new_unique], ignore_index=True)
 # Spalte aktualisieren
 merged_df['primaryCategories'] = merged_df.apply(fill_primary_categories, axis=1)
 merged_df.drop(columns=['primaryCategories_x', 'primaryCategories_y', '_merge'], inplace=True)
-
-# Anzahl gefundener Postleitzahlen
-count_filled = 0
-
-# Durchlaufe nur Zeilen mit leerem postalCode
-for idx, row in merged_df[merged_df['postalCode'].isna()].iterrows():
-    lat, lon = row['latitude'], row['longitude']
-    if pd.notna(lat) and pd.notna(lon):
-        zip_code = get_zip_code(lat, lon)
-        if zip_code:
-            merged_df.at[idx, 'postalCode'] = zip_code
-            count_filled += 1
-            print(f"Ergänzt: {zip_code} für Zeile {idx}")
-        time.sleep(1)  # Nominatim: max 1 Anfrage/Sekunde
-
-print(f"Fertig – {count_filled} ZIP-Codes ergänzt.")
+df_unique = merged_df.drop_duplicates(subset=['id', 'address', 'categories', 'city', 'country', 'latitude', 'longitude', 'name', 'postalCode', 'country', 'province', 'websites', 'primaryCategories', 'sourceURLs'], keep='first')
 
 # Ausgabe der Spaltennamen (zur Kontrolle)
-print("Neue Zeilen aus Datei 1:", len(new_unique))
-print("Gesamtergebnis:", len(merged_df))
-print(merged_df.head())
+print("Neue Zeilen aus Datei 1:", len(df_unique))
+print("Gesamtergebnis:", len(df_unique))
+print(df_unique.head())
 
 # 4. Optional: Ergebnis speichern
-merged_df.to_csv(path+"\\fast_food_vereint_ohne_duplikate.csv", index=False)
+df_unique.to_csv(path+"\\fast_food_vereint_ohne_duplikate.csv", index=False)
 
 # Beispiel: Nur Restaurants in Kalifornien (province == "CA")
 california_restaurants = merged_df[merged_df["province"] == "CA"]
@@ -101,3 +69,6 @@ california_restaurants = merged_df[merged_df["province"] == "CA"]
 # Ausgabe von ein paar Beispielen
 print(california_restaurants.head())
 
+#Konvertiere csv Datei in eine durchsuchbare xlsx Datei
+df = pd.read_csv(path+"\\fast_food_vereint_ohne_duplikate.csv")
+df.to_excel(path+"\\fast_food_vereint_ohne_duplikate.xlsx", index=False)
