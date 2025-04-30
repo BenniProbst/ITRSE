@@ -9,6 +9,13 @@ import pandas as pd
 import os
 import glob
 
+# Eat healthy - stay alive
+
+# Compare the probability of gun violence with the concentration of fast food restaurants and back life habits
+# https://www.kaggle.com/code/hainescity/fast-food-restaurants-eda
+
+# https://www.kaggle.com/code/shivamb/deep-exploration-of-gun-violence-in-us/input?select=gun-violence-data_01-2013_03-2018.csv
+
 def fill_primary_categories(row):
     if pd.isna(row['primaryCategories']) or str(row['primaryCategories']).strip() == '':
         if row['_merge'] == 'right_only':
@@ -18,10 +25,10 @@ def fill_primary_categories(row):
     else:
         return row['primaryCategories']  # vorhandener Wert bleibt
 
-# Download latest version
+# Download latest version fast food restaurants
 path = kagglehub.dataset_download("imtkaggleteam/fast-food-restaurants-across-america")
 
-print("Path to dataset files:", path)
+print("Path to dataset files for fast food restaurants:", path)
 
 # Alle CSV-Dateien im Verzeichnis finden
 csv_files = glob.glob(os.path.join(path, "*.csv"))
@@ -60,6 +67,26 @@ print("Neue Zeilen aus Datei 1:", len(df_unique))
 print("Gesamtergebnis:", len(df_unique))
 print(df_unique.head())
 
+# Ersetze die Staaten-Kürzel
+us_states = {
+    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+    'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia'
+}
+
+df_unique = df_unique.copy()
+df_unique['province'] = df_unique['province'].map(us_states).fillna(df_unique['province'])
+
 # 4. Optional: Ergebnis speichern
 df_unique.to_csv(path+"\\fast_food_vereint_ohne_duplikate.csv", index=False)
 
@@ -72,3 +99,26 @@ print(california_restaurants.head())
 #Konvertiere csv Datei in eine durchsuchbare xlsx Datei
 df = pd.read_csv(path+"\\fast_food_vereint_ohne_duplikate.csv")
 df.to_excel(path+"\\fast_food_vereint_ohne_duplikate.xlsx", index=False)
+
+# Download latest version fast food restaurants
+path2 = kagglehub.dataset_download("sobhanmoosavi/us-accidents")
+
+print("Path to dataset files for gun violence:", path2)
+
+# Alle CSV-Dateien im Verzeichnis finden
+csv_files2 = glob.glob(os.path.join(path2, "*.csv"))
+
+# 1. Riesige CSV-Dateien einlesen und Auswertung mit Fastfood restaurants vorbereiten
+df2_1 = pd.read_csv(path2 + "\\US_Accidents_March23.csv")
+
+# in excel schreiben
+"""
+chunk_size = 1_000_000
+for i in range(0, len(df2_1), chunk_size):
+    chunk = df2_1.iloc[i:i+chunk_size]
+    file_name = path2 + f"\\US_Accidents_March23_Part{i//chunk_size + 1}.xlsx"
+    chunk.to_excel(file_name, index=False)
+    print(f"Gespeichert: {file_name}")
+"""
+# Spaltennamen ausgeben
+print(df2_1.columns.tolist())
