@@ -164,7 +164,14 @@ def explore_categorical(df, col, max_categories=20):
     return top
 
 def explore_datetime(df, col):
-    data = pd.to_datetime(df[col], errors='coerce').dropna()
+    try:
+        if 'T' in df[col].dropna().astype(str).iloc[0]:
+            data = pd.to_datetime(df[col], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce').dropna()
+        else:
+            data = pd.to_datetime(df[col], format='%Y-%m-%d %H:%M:%S', errors='coerce').dropna()
+    except Exception:
+        data = pd.to_datetime(df[col], errors='coerce').dropna()
+
     if data.empty:
         return {"valid_dates": 0}
     delta = (data.max() - data.min()).days
@@ -203,11 +210,19 @@ def explore_text(df, col):
         "mean_values": data[np.isclose(lengths, avg_len)].tolist()
     }
 
+# === Spalten, die wir ausschließen wollen ===
+excluded_columns = {
+    'fastfood': ['id', 'keys'],
+    'accidents': ['ID']
+}
+
 # === Analyse ===
 report = {'fastfood': {}, 'accidents': {}}
 
 # 1. Fast Food Dataset
 for col in df_fast.columns:
+    if col in excluded_columns['fastfood']:
+        continue
     if df_fast[col].dtype in ['float64', 'int64']:
         report['fastfood'][col] = explore_numerical(df_fast, col)
     elif 'date' in col.lower():
@@ -220,6 +235,8 @@ for col in df_fast.columns:
 
 # 2. Accident Dataset
 for col in df_acc.columns:
+    if col in excluded_columns['accidents']:
+        continue
     if df_acc[col].dtype in ['float64', 'int64']:
         report['accidents'][col] = explore_numerical(df_acc, col)
     elif 'time' in col.lower() or 'timestamp' in col.lower():
