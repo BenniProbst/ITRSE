@@ -4,7 +4,7 @@
 # Install dependencies as needed:
 # pip install kagglehub[pandas-datasets]
 import kagglehub
-import openpyxl
+import numpy as np
 import pandas as pd
 import os
 import glob
@@ -25,10 +25,17 @@ def fill_primary_categories(row):
     else:
         return row['primaryCategories']  # vorhandener Wert bleibt
 
-# Download latest version fast food restaurants
+print("-------------------Download Datasets-------------------")
+
+# Download the latest version fast food restaurants
 path = kagglehub.dataset_download("imtkaggleteam/fast-food-restaurants-across-america")
 
 print("Path to dataset files for fast food restaurants:", path)
+
+# Download latest version us accidents dataset
+path2 = kagglehub.dataset_download("sobhanmoosavi/us-accidents")
+
+print("-------------------Clean Datasets-------------------")
 
 # Alle CSV-Dateien im Verzeichnis finden
 csv_files = glob.glob(os.path.join(path, "*.csv"))
@@ -87,6 +94,14 @@ us_states = {
 df_unique = df_unique.copy()
 df_unique['province'] = df_unique['province'].map(us_states).fillna(df_unique['province'])
 
+# Zeitformate anpassen
+df_unique['dateAdded'] = pd.to_datetime(df_unique['dateAdded'], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce')
+df_unique['dateUpdated'] = pd.to_datetime(df_unique['dateUpdated'], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce')
+
+# Dann ins gewünschte Format konvertieren
+df_unique['dateAdded'] = df_unique['dateAdded'].dt.strftime('%Y-%m-%d %H:%M:%S')
+df_unique['dateUpdated'] = df_unique['dateUpdated'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
 # 4. Optional: Ergebnis speichern
 df_unique.to_csv(path+"\\fast_food_vereint_ohne_duplikate.csv", index=False)
 
@@ -97,11 +112,9 @@ california_restaurants = merged_df[merged_df["province"] == "CA"]
 print(california_restaurants.head())
 
 #Konvertiere csv Datei in eine durchsuchbare xlsx Datei
-df = pd.read_csv(path+"\\fast_food_vereint_ohne_duplikate.csv")
-df.to_excel(path+"\\fast_food_vereint_ohne_duplikate.xlsx", index=False)
+df_fast = pd.read_csv(path + "\\fast_food_vereint_ohne_duplikate.csv")
+df_fast.to_excel(path + "\\fast_food_vereint_ohne_duplikate.xlsx", index=False)
 
-# Download latest version fast food restaurants
-path2 = kagglehub.dataset_download("sobhanmoosavi/us-accidents")
 
 print("Path to dataset files for gun violence:", path2)
 
@@ -109,7 +122,7 @@ print("Path to dataset files for gun violence:", path2)
 csv_files2 = glob.glob(os.path.join(path2, "*.csv"))
 
 # 1. Riesige CSV-Dateien einlesen und Auswertung mit Fastfood restaurants vorbereiten
-df2_1 = pd.read_csv(path2 + "\\US_Accidents_March23.csv")
+df_acc = pd.read_csv(path2 + "\\US_Accidents_March23.csv")
 
 # in excel schreiben
 """
@@ -120,5 +133,104 @@ for i in range(0, len(df2_1), chunk_size):
     chunk.to_excel(file_name, index=False)
     print(f"Gespeichert: {file_name}")
 """
+
+print("-------------------Fundamental Exploration of Datasets-------------------")
+
 # Spaltennamen ausgeben
-print(df2_1.columns.tolist())
+# Spaltennamen ausgeben
+print(df_fast.columns.tolist())
+print(df_acc.columns.tolist())
+
+# === Hilfsfunktionen ===
+def explore_numerical(df, col):
+    data = df[col].dropna()
+    min_val, max_val, mean_val = data.min(), data.max(), data.mean()
+    return {
+        "count": len(data),
+        "min": min_val,
+        "max": max_val,
+        "mean": mean_val,
+        "std": data.std(),
+        "min_indices": data[data == min_val].index.tolist(),
+        "max_indices": data[data == max_val].index.tolist(),
+        "mean_indices": data[np.isclose(data, mean_val)].index.tolist()
+    }
+
+def explore_categorical(df, col, max_categories=20):
+    vc = df[col].value_counts(dropna=False)
+    top = vc.head(max_categories).to_dict()
+    if len(vc) > max_categories:
+        top['__other__'] = vc.iloc[max_categories:].sum()
+    return top
+
+def explore_datetime(df, col):
+    data = pd.to_datetime(df[col], errors='coerce').dropna()
+    if data.empty:
+        return {"valid_dates": 0}
+    delta = (data.max() - data.min()).days
+    result = {
+        "start": str(data.min()),
+        "end": str(data.max()),
+        "days": delta,
+        "total_entries": len(data),
+        "avg_entries_per_day": round(len(data)/delta, 2) if delta > 0 else np.nan
+    }
+    if 'Start_Time' in df.columns and 'End_Time' in df.columns:
+        start_times = pd.to_datetime(df['Start_Time'], errors='coerce')
+        end_times = pd.to_datetime(df['End_Time'], errors='coerce')
+        durations = (end_times - start_times).dt.total_seconds() / 3600  # in Stunden
+        durations = durations.dropna()
+        result["avg_duration_hours"] = durations.mean()
+        result["std_duration_hours"] = durations.std()
+    return result
+
+def explore_text(df, col):
+    data = df[col].dropna().astype(str)
+    lengths = data.str.len()
+    avg_len = lengths.mean()
+    min_len = lengths.min()
+    max_len = lengths.max()
+    return {
+        "count": len(data),
+        "avg_length": avg_len,
+        "max_length": max_len,
+        "min_length": min_len,
+        "max_indices": lengths[lengths == max_len].index.tolist(),
+        "min_indices": lengths[lengths == min_len].index.tolist(),
+        "mean_indices": lengths[np.isclose(lengths, avg_len)].index.tolist(),
+        "max_values": data[lengths == max_len].tolist(),
+        "min_values": data[lengths == min_len].tolist(),
+        "mean_values": data[np.isclose(lengths, avg_len)].tolist()
+    }
+
+# === Analyse ===
+report = {'fastfood': {}, 'accidents': {}}
+
+# 1. Fast Food Dataset
+for col in df_fast.columns:
+    if df_fast[col].dtype in ['float64', 'int64']:
+        report['fastfood'][col] = explore_numerical(df_fast, col)
+    elif 'date' in col.lower():
+        report['fastfood'][col] = explore_datetime(df_fast, col)
+    elif df_fast[col].dtype == 'object':
+        if col in ['sourceURLs', 'websites']:
+            report['fastfood'][col] = explore_text(df_fast, col)
+        else:
+            report['fastfood'][col] = explore_categorical(df_fast, col, max_categories=35)
+
+# 2. Accident Dataset
+for col in df_acc.columns:
+    if df_acc[col].dtype in ['float64', 'int64']:
+        report['accidents'][col] = explore_numerical(df_acc, col)
+    elif 'time' in col.lower() or 'timestamp' in col.lower():
+        report['accidents'][col] = explore_datetime(df_acc, col)
+    elif df_acc[col].dtype == 'object':
+        if col in ['Description']:
+            report['accidents'][col] = explore_text(df_acc, col)
+        else:
+            report['accidents'][col] = explore_categorical(df_acc, col, max_categories=20)
+
+# === Bericht anzeigen (kompakt) ===
+import pprint
+pp = pprint.PrettyPrinter(depth=3, sort_dicts=False, compact=True)
+pp.pprint(report)
