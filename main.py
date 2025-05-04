@@ -1,6 +1,7 @@
 # Put the data loading code here
 # After loading, print out a sample of the raw data as it was loaded
-
+import gpd
+import geopandas as gdp
 # Install dependencies as needed:
 # pip install kagglehub[pandas-datasets]
 import kagglehub
@@ -11,7 +12,8 @@ import glob
 
 # Eat healthy - stay alive
 
-# Compare the probability of gun violence with the concentration of fast food restaurants and back life habits
+# Compare the probability of gun violence within the proximity of fast food restaurants against the propability of
+# being far away from fast food restaurants.
 # https://www.kaggle.com/code/hainescity/fast-food-restaurants-eda
 
 # https://www.kaggle.com/code/shivamb/deep-exploration-of-gun-violence-in-us/input?select=gun-violence-data_01-2013_03-2018.csv
@@ -102,6 +104,16 @@ df_unique['dateUpdated'] = pd.to_datetime(df_unique['dateUpdated'], format='%Y-%
 df_unique['dateAdded'] = df_unique['dateAdded'].dt.strftime('%Y-%m-%d %H:%M:%S')
 df_unique['dateUpdated'] = df_unique['dateUpdated'].dt.strftime('%Y-%m-%d %H:%M:%S')
 
+# Name normalization
+def normalize_name(name):
+    if pd.isna(name):
+        return name
+    name = name.strip()
+    name = name.lower()
+    return name.capitalize()  # Nur erster Buchstabe groß
+
+df_unique['name'] = df_unique['name'].astype(str).map(normalize_name)
+
 # 4. Optional: Ergebnis speichern
 df_unique.to_csv(path+"\\fast_food_vereint_ohne_duplikate.csv", index=False)
 
@@ -123,6 +135,14 @@ csv_files2 = glob.glob(os.path.join(path2, "*.csv"))
 
 # 1. Riesige CSV-Dateien einlesen und Auswertung mit Fastfood restaurants vorbereiten
 df_acc = pd.read_csv(path2 + "\\US_Accidents_March23.csv")
+
+# Entferne Zeilen mit fehlenden Koordinaten
+df_fast = df_fast.dropna(subset=["latitude", "longitude"])
+df_acc = df_acc.dropna(subset=["Start_Lat", "Start_Lng", "End_Lat", "End_Lng"])
+
+# Verwende Mittelwert aus Start- und Endkoordinaten als ungefähre Unfallposition
+df_acc["mid_lat"] = (df_acc["Start_Lat"] + df_acc["End_Lat"]) / 2
+df_acc["mid_lng"] = (df_acc["Start_Lng"] + df_acc["End_Lng"]) / 2
 
 # in excel schreiben
 """
@@ -271,3 +291,40 @@ for col in df_acc.columns:
 
 pp.pprint(report)
 print("-------------------Analyse of Accidents Dataset-------------------")
+
+# berechnet die nächste Entfernung eines Unfalls zu einem Fastfood-Restaurant und stelle die top 10 der
+# nächsten Unfälle in einer Liste dar
+
+# GeoDataFrames erstellen
+gdf_fast = gpd.GeoDataFrame(
+    df_fast,
+    geometry=gpd.points_from_xy(df_fast["longitude"], df_fast["latitude"]),
+    crs="EPSG:4326"
+)
+
+gdf_acc = gpd.GeoDataFrame(
+    df_acc,
+    geometry=gpd.points_from_xy(df_acc["mid_lng"], df_acc["mid_lat"]),
+    crs="EPSG:4326"
+)
+
+# In metrisches Koordinatensystem konvertieren
+gdf_fast = gdf_fast.to_crs(epsg=3857)
+gdf_acc = gdf_acc.to_crs(epsg=3857)
+
+# Für jedes Fastfood-Restaurant die 10 nächsten Unfälle ermitteln
+results = []
+for idx, fastfood in gdf_fast.iterrows():
+    distances = gdf_acc.distance(fastfood.geometry)
+    nearest_indices = distances.nsmallest(10).index
+    nearest_accidents = df_acc.loc[nearest_indices].copy()
+    nearest_accidents["distance_m"] = distances.loc[nearest_indices].values
+    nearest_accidents["fastfood_name"] = fastfood["name"]
+    nearest_accidents["fastfood_address"] = fastfood["address"]
+    results.append(nearest_accidents)
+
+# Ergebnisse zusammenführen
+top10_nearest = pd.concat(results, ignore_index=True)
+
+# Anzeige
+import ace_tools as tools; tools.display_dataframe_to_user(name="Top 10 Nächste Unfälle zu Fastfood-Restaurants", dataframe=top10_nearest)
