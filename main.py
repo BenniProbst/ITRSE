@@ -144,17 +144,27 @@ print(df_acc.columns.tolist())
 # === Hilfsfunktionen ===
 def explore_numerical(df, col):
     data = df[col].dropna()
-    min_val, max_val, mean_val = data.min(), data.max(), data.mean()
+    min_val = data.min()
+    max_val = data.max()
+    mean_val = data.mean()
+    std_val = data.std()
+
+    # Indizes für exakte oder numerisch ähnliche Werte
+    min_indices = data[data == min_val].index.tolist()
+    max_indices = data[data == max_val].index.tolist()
+    mean_indices = data[np.isclose(data, mean_val)].index.tolist()
+
     return {
         "count": len(data),
         "min": min_val,
         "max": max_val,
         "mean": mean_val,
-        "std": data.std(),
-        "min_indices": data[data == min_val].index.tolist(),
-        "max_indices": data[data == max_val].index.tolist(),
-        "mean_indices": data[np.isclose(data, mean_val)].index.tolist()
+        "std": std_val,
+        "min_indices": min_indices or "None found",
+        "max_indices": max_indices or "None found",
+        "mean_indices": mean_indices or "None found"
     }
+
 
 def explore_categorical(df, col, max_categories=20):
     vc = df[col].value_counts(dropna=False)
@@ -217,9 +227,15 @@ excluded_columns = {
 }
 
 # === Analyse ===
-report = {'fastfood': {}, 'accidents': {}}
+
+# === Bericht anzeigen (kompakt) ===
+import pprint
+pp = pprint.PrettyPrinter(depth=3, sort_dicts=False, compact=True)
 
 # 1. Fast Food Dataset
+print("Fast Food Dataset Analysis:")
+report = {'fastfood': {}}
+
 for col in df_fast.columns:
     if col in excluded_columns['fastfood']:
         continue
@@ -231,9 +247,15 @@ for col in df_fast.columns:
         if col in ['sourceURLs', 'websites']:
             report['fastfood'][col] = explore_text(df_fast, col)
         else:
-            report['fastfood'][col] = explore_categorical(df_fast, col, max_categories=35)
+            report['fastfood'][col] = explore_categorical(df_fast, col, max_categories=55)
+
+pp.pprint(report)
+print("-------------------Analyse of Fastfood Dataset-------------------")
 
 # 2. Accident Dataset
+print("Accidents Dataset Analysis:")
+report = {'accidents': {}}
+
 for col in df_acc.columns:
     if col in excluded_columns['accidents']:
         continue
@@ -245,9 +267,7 @@ for col in df_acc.columns:
         if col in ['Description']:
             report['accidents'][col] = explore_text(df_acc, col)
         else:
-            report['accidents'][col] = explore_categorical(df_acc, col, max_categories=20)
+            report['accidents'][col] = explore_categorical(df_acc, col, max_categories=55)
 
-# === Bericht anzeigen (kompakt) ===
-import pprint
-pp = pprint.PrettyPrinter(depth=3, sort_dicts=False, compact=True)
 pp.pprint(report)
+print("-------------------Analyse of Accidents Dataset-------------------")
