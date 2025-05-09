@@ -1,14 +1,15 @@
 # Put the data loading code here
 # After loading, print out a sample of the raw data as it was loaded
-import gpd
-import geopandas as gdp
+
 # Install dependencies as needed:
 # pip install kagglehub[pandas-datasets]
+import geopandas
 import kagglehub
 import numpy as np
 import pandas as pd
 import os
 import glob
+import openpyxl
 
 # Eat healthy - stay alive
 
@@ -145,14 +146,14 @@ df_acc["mid_lat"] = (df_acc["Start_Lat"] + df_acc["End_Lat"]) / 2
 df_acc["mid_lng"] = (df_acc["Start_Lng"] + df_acc["End_Lng"]) / 2
 
 # in excel schreiben
-"""
+
 chunk_size = 1_000_000
-for i in range(0, len(df2_1), chunk_size):
-    chunk = df2_1.iloc[i:i+chunk_size]
+for i in range(0, len(df_acc), chunk_size):
+    chunk = df_acc.iloc[i:i+chunk_size]
     file_name = path2 + f"\\US_Accidents_March23_Part{i//chunk_size + 1}.xlsx"
     chunk.to_excel(file_name, index=False)
     print(f"Gespeichert: {file_name}")
-"""
+
 
 print("-------------------Fundamental Exploration of Datasets-------------------")
 
@@ -296,35 +297,54 @@ print("-------------------Analyse of Accidents Dataset-------------------")
 # nächsten Unfälle in einer Liste dar
 
 # GeoDataFrames erstellen
-gdf_fast = gpd.GeoDataFrame(
-    df_fast,
-    geometry=gpd.points_from_xy(df_fast["longitude"], df_fast["latitude"]),
-    crs="EPSG:4326"
-)
-
-gdf_acc = gpd.GeoDataFrame(
-    df_acc,
-    geometry=gpd.points_from_xy(df_acc["mid_lng"], df_acc["mid_lat"]),
-    crs="EPSG:4326"
-)
-
 # In metrisches Koordinatensystem konvertieren
-gdf_fast = gdf_fast.to_crs(epsg=3857)
-gdf_acc = gdf_acc.to_crs(epsg=3857)
+gdf_fast = geopandas.GeoDataFrame(
+    df_fast,
+    geometry=geopandas.points_from_xy(df_fast["longitude"], df_fast["latitude"]),
+    crs="EPSG:4326"
+).to_crs(epsg=3857)
 
-# Für jedes Fastfood-Restaurant die 10 nächsten Unfälle ermitteln
-results = []
-for idx, fastfood in gdf_fast.iterrows():
-    distances = gdf_acc.distance(fastfood.geometry)
-    nearest_indices = distances.nsmallest(10).index
-    nearest_accidents = df_acc.loc[nearest_indices].copy()
-    nearest_accidents["distance_m"] = distances.loc[nearest_indices].values
-    nearest_accidents["fastfood_name"] = fastfood["name"]
-    nearest_accidents["fastfood_address"] = fastfood["address"]
-    results.append(nearest_accidents)
+gdf_acc = geopandas.GeoDataFrame(
+    df_acc,
+    geometry=geopandas.points_from_xy(df_acc["mid_lng"], df_acc["mid_lat"]),
+    crs="EPSG:4326"
+).to_crs(epsg=3857)
 
-# Ergebnisse zusammenführen
-top10_nearest = pd.concat(results, ignore_index=True)
+# === Zielverzeichnis vorbereiten ===
+output_dir = path2 + "\\accident_reports_at_restaurants"
+if os.path.exists(output_dir):
+    for f in os.listdir(output_dir):
+        os.remove(os.path.join(output_dir, f))
+else:
+    os.makedirs(output_dir)
 
-# Anzeige
-import ace_tools as tools; tools.display_dataframe_to_user(name="Top 10 Nächste Unfälle zu Fastfood-Restaurants", dataframe=top10_nearest)
+distance_threshold_m = 300
+
+# === Zuordnung und Speicherung ===
+for idx, restaurant in gdf_fast.iterrows():
+    restaurant_geom = restaurant.geometry
+    nearby_accidents = gdf_acc[gdf_acc.distance(restaurant_geom) <= distance_threshold_m].copy()
+
+    state = restaurant['province'].replace(" ", "_") if pd.notna(restaurant['province']) else "Unknown"
+    plz = str(restaurant['postalCode']).replace(" ", "_") if pd.notna(restaurant['postalCode']) else "Unknown"
+    city = restaurant['city'].replace(" ", "_") if pd.notna(restaurant['city']) else "Unknown"
+    street = restaurant['address'].replace(" ", "_") if pd.notna(restaurant['address']) else "Unknown"
+    name = restaurant['name'].replace(" ", "_").replace("/", "_")
+    date = pd.Timestamp.now().strftime("%Y%m%d")
+
+    filename = f"{date} (Aktualisiert), {name}, Adresse_{state}_{plz}_{city}_{street}.xlsx"
+    filepath = os.path.join(output_dir, filename)
+
+    columns_to_save = [
+        'ID', 'Source', 'Severity', 'Start_Time', 'End_Time', 'Start_Lat', 'Start_Lng', 'End_Lat', 'End_Lng',
+        'Distance(mi)', 'Description', 'Street', 'City', 'County', 'State', 'Zipcode', 'Country', 'Timezone',
+        'Airport_Code', 'Weather_Timestamp', 'Temperature(F)', 'Wind_Chill(F)', 'Humidity(%)', 'Pressure(in)',
+        'Visibility(mi)', 'Wind_Direction', 'Wind_Speed(mph)', 'Precipitation(in)', 'Weather_Condition',
+        'Amenity', 'Bump', 'Crossing', 'Give_Way', 'Junction', 'No_Exit', 'Railway', 'Roundabout', 'Station',
+        'Stop', 'Traffic_Calming', 'Traffic_Signal', 'Turning_Loop', 'Sunrise_Sunset', 'Civil_Twilight',
+        'Nautical_Twilight', 'Astronomical_Twilight', 'mid_lat', 'mid_lng'
+    ]
+    # Sicherstellen, dass Spalten existieren
+    existing_columns = [col for col in columns_to_save if col in nearby_accidents.columns]
+    nearby_accidents[existing_columns].to_excel(filepath, index=False)
+
