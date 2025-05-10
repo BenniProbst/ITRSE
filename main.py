@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import os
 import glob
+import os.path
 import openpyxl
 
 # Eat healthy - stay alive
@@ -35,9 +36,8 @@ path = kagglehub.dataset_download("imtkaggleteam/fast-food-restaurants-across-am
 
 print("Path to dataset files for fast food restaurants:", path)
 
-# Download latest version us accidents dataset
-path2 = kagglehub.dataset_download("sobhanmoosavi/us-accidents")
-
+# Download latest version us gun violence dataset
+path2 = kagglehub.dataset_download('jameslko/gun-violence-data') #"sobhanmoosavi/us-accidents"
 print("-------------------Clean Datasets-------------------")
 
 # Alle CSV-Dateien im Verzeichnis finden
@@ -135,24 +135,21 @@ print("Path to dataset files for gun violence:", path2)
 csv_files2 = glob.glob(os.path.join(path2, "*.csv"))
 
 # 1. Riesige CSV-Dateien einlesen und Auswertung mit Fastfood restaurants vorbereiten
-df_acc = pd.read_csv(path2 + "\\US_Accidents_March23.csv")
+df_acc = pd.read_csv(path2 + "\\gun-violence-data_01-2013_03-2018.csv")
 
 # Entferne Zeilen mit fehlenden Koordinaten
 df_fast = df_fast.dropna(subset=["latitude", "longitude"])
-df_acc = df_acc.dropna(subset=["Start_Lat", "Start_Lng", "End_Lat", "End_Lng"])
-
-# Verwende Mittelwert aus Start- und Endkoordinaten als ungefähre Unfallposition
-df_acc["mid_lat"] = (df_acc["Start_Lat"] + df_acc["End_Lat"]) / 2
-df_acc["mid_lng"] = (df_acc["Start_Lng"] + df_acc["End_Lng"]) / 2
+df_acc = df_acc.dropna(subset=["latitude", "longitude"])
 
 # in excel schreiben
 
 chunk_size = 1_000_000
-for i in range(0, len(df_acc), chunk_size):
-    chunk = df_acc.iloc[i:i+chunk_size]
-    file_name = path2 + f"\\US_Accidents_March23_Part{i//chunk_size + 1}.xlsx"
-    chunk.to_excel(file_name, index=False)
-    print(f"Gespeichert: {file_name}")
+if not os.path.exists(path2 + "\\gun-violence-data_01-2013_03-2018_Part1.xlsx"):
+    for i in range(0, len(df_acc), chunk_size):
+        chunk = df_acc.iloc[i:i+chunk_size]
+        file_name = path2 + f"\\gun-violence-data_01-2013_03-2018_Part{i//chunk_size + 1}.xlsx"
+        chunk.to_excel(file_name, index=False)
+        print(f"Gespeichert: {file_name}")
 
 
 print("-------------------Fundamental Exploration of Datasets-------------------")
@@ -306,7 +303,7 @@ gdf_fast = geopandas.GeoDataFrame(
 
 gdf_acc = geopandas.GeoDataFrame(
     df_acc,
-    geometry=geopandas.points_from_xy(df_acc["mid_lng"], df_acc["mid_lat"]),
+    geometry=geopandas.points_from_xy(df_acc["longitude"], df_acc["latitude"]),
     crs="EPSG:4326"
 ).to_crs(epsg=3857)
 
