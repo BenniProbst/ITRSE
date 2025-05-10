@@ -38,6 +38,9 @@ print("Path to dataset files for fast food restaurants:", path)
 
 # Download latest version us gun violence dataset
 path2 = kagglehub.dataset_download('jameslko/gun-violence-data') #"sobhanmoosavi/us-accidents"
+
+print("Path to dataset files for gun violence:", path2)
+
 print("-------------------Clean Datasets-------------------")
 
 # Alle CSV-Dateien im Verzeichnis finden
@@ -241,7 +244,7 @@ def explore_text(df, col):
 # === Spalten, die wir ausschließen wollen ===
 excluded_columns = {
     'fastfood': ['id', 'keys'],
-    'accidents': ['ID']
+    'accidents': ['incident_id']
 }
 
 # === Analyse ===
@@ -271,7 +274,7 @@ pp.pprint(report)
 print("-------------------Analyse of Fastfood Dataset-------------------")
 
 # 2. Accident Dataset
-print("Accidents Dataset Analysis:")
+print("Gun Violence Dataset Analysis:")
 report = {'accidents': {}}
 
 for col in df_acc.columns:
@@ -288,7 +291,7 @@ for col in df_acc.columns:
             report['accidents'][col] = explore_categorical(df_acc, col, max_categories=55)
 
 pp.pprint(report)
-print("-------------------Analyse of Accidents Dataset-------------------")
+print("-------------------Analyse of Gun Violence Dataset-------------------")
 
 # berechnet die nächste Entfernung eines Unfalls zu einem Fastfood-Restaurant und stelle die top 10 der
 # nächsten Unfälle in einer Liste dar
