@@ -516,7 +516,6 @@ plt.figure(figsize=(10, 10))
 df_comb["gun_stolen"].value_counts().plot.pie(autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung Waffenstatus (gun_stolen)")
 plt.ylabel("")
-plt.tight_layout()
 plt.show()
 
 # === Kuchendiagramm 2: Klassifizierte Waffentypen ===
@@ -536,7 +535,6 @@ df_stolen = pd.Series(stolen_all).value_counts()
 plt.figure(figsize=(18, 18))
 plt.pie(df_stolen, labels=df_stolen.index, autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung des Waffenstatus (gun_stolen)")
-plt.tight_layout()
 plt.show()
 
 # Piechart für gun_type (nur diese Spalte)
@@ -548,7 +546,6 @@ df_types = pd.Series(type_all).value_counts()
 plt.figure(figsize=(18, 18))
 plt.pie(df_types, labels=df_types.index, autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung der Waffentypen (gun_type)")
-plt.tight_layout()
 plt.show()
 
 # Heatmap USA mit Restaurantvorfällen (Farben grün-gelb-rot je nach Anzahl)
