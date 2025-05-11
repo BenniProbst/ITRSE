@@ -300,8 +300,6 @@ if os.path.exists(output_dir):
 else:
     os.makedirs(output_dir)
 
-distance_threshold_m = 300
-
 # === Pro Restaurant nahe Vorfälle finden und Gesamtergebnis auswerten ===
 
 # Übersicht initialisieren und mit multithreading verarbeiten
@@ -311,6 +309,7 @@ import multiprocessing
 
 # Funktion zur Verarbeitung eines einzelnen Restaurants
 def process_restaurant(restaurant):
+    distance_threshold_m = 300
     try:
         name = str(restaurant["name"]).replace(" ", "_").replace("/", "_")
         state = str(restaurant.get("province", "Unknown")).replace(" ", "_")
