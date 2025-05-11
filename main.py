@@ -10,7 +10,7 @@ import os
 import glob
 import os.path
 import openpyxl
-import datetime
+from datetime import datetime
 
 # Eat healthy - stay alive
 
@@ -250,10 +250,6 @@ for col in df_fast.columns:
 pp.pprint(report)
 print("-------------------Analyse of Fastfood Dataset-------------------")
 
-# 2. Accident Dataset
-print("Gun Violence Dataset Analysis:")
-report = {'accidents': {}}
-
 # === Analyse der Waffengewalt ===
 print("Analyse Gun Violence Dataset:")
 report = {"gun_violence": {}}
@@ -301,13 +297,30 @@ else:
 distance_threshold_m = 300
 
 # === Pro Restaurant nahe Vorfälle finden ===
+
+count = 1
 for _, restaurant in gdf_fast.iterrows():
+    name = str(restaurant["name"]).replace(" ", "_").replace("/", "_")
+    state = str(restaurant.get("province", "Unknown")).replace(" ", "_")
+    plz = str(restaurant.get("postalCode", "Unknown")).replace(" ", "_")
+    city = str(restaurant.get("city", "Unknown")).replace(" ", "_")
+    street = str(restaurant.get("address", "Unknown")).replace(" ", "_")
+
+    filename_search = f"{name}, at {state}_{plz}_{city}_{street}"
+    print(f"Searching for accidents near {filename_search}, {count} of {len(df_fast)} searched...")
+
     x, y = restaurant.geometry.x, restaurant.geometry.y
     candidates = gdf_gun[
         (gdf_gun.geometry.x >= x - 300) & (gdf_gun.geometry.x <= x + 300) &
         (gdf_gun.geometry.y >= y - 300) & (gdf_gun.geometry.y <= y + 300)
     ]
     nearby = candidates[candidates.distance(restaurant.geometry) <= 300].copy()
+
+    count += 1
+
+    if len(nearby) == 0:
+        continue
+
     if "geometry" in nearby.columns:
         nearby.drop(columns=["geometry"], inplace=True)
 
@@ -321,14 +334,9 @@ for _, restaurant in gdf_fast.iterrows():
     else:
         date_str = datetime.now().strftime("%Y%m%d")
 
-    name = str(restaurant["name"]).replace(" ", "_").replace("/", "_")
-    state = str(restaurant.get("province", "Unknown")).replace(" ", "_")
-    plz = str(restaurant.get("postalCode", "Unknown")).replace(" ", "_")
-    city = str(restaurant.get("city", "Unknown")).replace(" ", "_")
-    street = str(restaurant.get("address", "Unknown")).replace(" ", "_")
-
     filename = f"{date_str}, {name}, at {state}_{plz}_{city}_{street}.xlsx"
     filepath = os.path.join(output_dir, filename)
 
     nearby.to_excel(filepath, index=False)
+    print(f"Created report for {filename}")
 
