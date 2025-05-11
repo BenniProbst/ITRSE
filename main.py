@@ -13,7 +13,10 @@ import openpyxl
 from datetime import datetime
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
-import matplotlib.colors as mcolors
+import matplotlib.colors as mathcolors
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
+from tqdm import tqdm
 
 # Eat healthy - stay alive
 
@@ -301,72 +304,79 @@ distance_threshold_m = 300
 
 # === Pro Restaurant nahe Vorfälle finden und Gesamtergebnis auswerten ===
 
-# Übersicht initialisieren
-summary_data = []
+# Übersicht initialisieren und mit multithreading verarbeiten
 
-count = 1
-for _, restaurant in gdf_fast.iterrows():
-    name = str(restaurant["name"]).replace(" ", "_").replace("/", "_")
-    state = str(restaurant.get("province", "Unknown")).replace(" ", "_")
-    plz = str(restaurant.get("postalCode", "Unknown")).replace(" ", "_")
-    city = str(restaurant.get("city", "Unknown")).replace(" ", "_")
-    street = str(restaurant.get("address", "Unknown")).replace(" ", "_")
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
 
-    filename_search = f"{name}, at {state}_{plz}_{city}_{street}"
-    print(f"Searching for gun incident near {filename_search}, {count} of {len(df_fast)} searched...")
+# Funktion zur Verarbeitung eines einzelnen Restaurants
+def process_restaurant(restaurant):
+    try:
+        name = str(restaurant["name"]).replace(" ", "_").replace("/", "_")
+        state = str(restaurant.get("province", "Unknown")).replace(" ", "_")
+        plz = str(restaurant.get("postalCode", "Unknown")).replace(" ", "_")
+        city = str(restaurant.get("city", "Unknown")).replace(" ", "_")
+        street = str(restaurant.get("address", "Unknown")).replace(" ", "_")
 
-    x, y = restaurant.geometry.x, restaurant.geometry.y
-    candidates = gdf_gun[
-        (gdf_gun.geometry.x >= x - 300) & (gdf_gun.geometry.x <= x + 300) &
-        (gdf_gun.geometry.y >= y - 300) & (gdf_gun.geometry.y <= y + 300)
-    ]
-    nearby = candidates[candidates.distance(restaurant.geometry) <= 300].copy()
+        filename_search = f"{name}, at {state}_{plz}_{city}_{street}"
+        print(f"Searching for gun incident near {filename_search}...")
 
-    # Füge die Distanzspalte hinzu
-    nearby["incident distance"] = nearby.geometry.distance(restaurant.geometry)
+        x, y = restaurant.geometry.x, restaurant.geometry.y
+        candidates = gdf_gun[
+            (gdf_gun.geometry.x >= x - distance_threshold_m) & (gdf_gun.geometry.x <= x + distance_threshold_m) &
+            (gdf_gun.geometry.y >= y - distance_threshold_m) & (gdf_gun.geometry.y <= y + distance_threshold_m)
+        ]
+        nearby = candidates[candidates.distance(restaurant.geometry) <= distance_threshold_m].copy()
 
-    # Füge Spalte für gestohlene Waffen hinzu (NaN ersetzen)
-    nearby["gun_stolen"] = nearby["gun_stolen"].fillna("Unknown")
+        nearby["incident distance"] = nearby.geometry.distance(restaurant.geometry)
+        nearby["gun_stolen"] = nearby["gun_stolen"].fillna("Unknown")
 
-    count += 1
+        if len(nearby) == 0:
+            return None
 
-    if len(nearby) == 0:
-        continue
+        if "geometry" in nearby.columns:
+            nearby.drop(columns=["geometry"], inplace=True)
 
-    if "geometry" in nearby.columns:
-        nearby.drop(columns=["geometry"], inplace=True)
-
-    first_date = restaurant.get("dateAdded", None)
-    if pd.notna(first_date):
-        try:
-            parsed_date = pd.to_datetime(first_date)
-            date_str = parsed_date.strftime("%Y%m%d")
-        except Exception:
+        first_date = restaurant.get("dateAdded", None)
+        if pd.notna(first_date):
+            try:
+                parsed_date = pd.to_datetime(first_date)
+                date_str = parsed_date.strftime("%Y%m%d")
+            except Exception:
+                date_str = datetime.now().strftime("%Y%m%d")
+        else:
             date_str = datetime.now().strftime("%Y%m%d")
-    else:
-        date_str = datetime.now().strftime("%Y%m%d")
 
-    filename = f"{date_str}, {name}, at {state}_{plz}_{city}_{street}.xlsx"
-    filepath = os.path.join(output_dir, filename)
+        filename = f"{date_str}, {name}, at {state}_{plz}_{city}_{street}.xlsx"
+        filepath = os.path.join(output_dir, filename)
+        nearby.to_excel(filepath, index=False)
 
-    nearby.to_excel(filepath, index=False)
+        return {
+            "name": restaurant["name"],
+            "address": restaurant["address"],
+            "state": state,
+            "city": city,
+            "postalCode": plz,
+            "num_incidents": len(nearby),
+            "total_killed": nearby["n_killed"].sum(),
+            "total_injured": nearby["n_injured"].sum(),
+            "gun_stolen_counts": nearby["gun_stolen"].value_counts().to_dict(),
+            "restaurant_latitude": restaurant["latitude"],
+            "restaurant_longitude": restaurant["longitude"]
+        }
+    except Exception as e:
+        print(f"Error processing restaurant: {e}")
+        return None
 
-    # Statistikdaten für Übersichtstabelle
-    summary_data.append({
-        "name": restaurant["name"],
-        "address": restaurant["address"],
-        "state": state,
-        "city": city,
-        "postalCode": plz,
-        "num_incidents": len(nearby),
-        "total_killed": nearby["n_killed"].sum(),
-        "total_injured": nearby["n_injured"].sum(),
-        "gun_stolen_counts": nearby["gun_stolen"].value_counts().to_dict(),
-        "restaurant_latitude": restaurant["latitude"],
-        "restaurant_longitude": restaurant["longitude"]
-    })
-
-    print(f"Created gun incident report for {filename}")
+# Nutze alle verfügbaren Threads
+summary_data = []
+num_threads = multiprocessing.cpu_count()
+with ThreadPoolExecutor(max_workers=num_threads) as executor:
+    futures = [executor.submit(process_restaurant, row) for _, row in gdf_fast.iterrows()]
+    for future in as_completed(futures):
+        result = future.result()
+        if result:
+            summary_data.append(result)
 
 # Waffengewalt auswerten
 
@@ -442,12 +452,12 @@ incident_counts = gdf["num_incidents"]
 max_incidents = incident_counts.max()
 
 # Farbverlauf manuell definieren: Grün (wenig) → Gelb (mittel) → Rot (viel)
-cmap = mcolors.LinearSegmentedColormap.from_list(
+cmap = mathcolors.LinearSegmentedColormap.from_list(
     "custom_green_red", ["green", "yellow", "red"]
 )
 
 # Normalisierungsfunktion für Farbverlauf
-norm = mcolors.Normalize(vmin=0, vmax=max_incidents)
+norm = mathcolors.Normalize(vmin=0, vmax=max_incidents)
 
 # Farben für jeden Punkt berechnen
 colors = [cmap(norm(x)) for x in incident_counts]
