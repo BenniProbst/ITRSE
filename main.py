@@ -423,7 +423,7 @@ pp.pprint(top10[["name", "address", "num_incidents", "total_killed", "total_inju
 # Plotting Charts and Heat maps
 
 # Barplot 1: Anzahl der Vorfälle
-plt.figure(figsize=(12, 6))
+plt.figure(figsize=(12, 10))
 plt.bar(top10["name"] + " @ " + top10["city"] + " - " + top10["state"] + ", " + top10["address"], top10["num_incidents"])
 plt.title("Top 10 gefährlichste Restaurants in den USA nach Anzahl der Vorfälle")
 plt.ylabel("Anzahl der Vorfälle")
@@ -432,7 +432,7 @@ plt.tight_layout()
 plt.show()
 
 # Barplot 2: Anzahl der Toten
-plt.figure(figsize=(12, 6))
+plt.figure(figsize=(12, 10))
 plt.bar(top10["name"] + " @ " + top10["city"] + " - " + top10["state"] + ", " + top10["address"], top10["total_killed"])
 plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Toten")
 plt.ylabel("Anzahl der Toten")
@@ -441,7 +441,7 @@ plt.tight_layout()
 plt.show()
 
 # Barplot 3: Anzahl der Verletzten
-plt.figure(figsize=(12, 6))
+plt.figure(figsize=(12, 10))
 plt.bar(top10["name"] + " @ " + top10["city"] + " - " + top10["state"] + ", " + top10["address"], top10["total_injured"])
 plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Verletzten")
 plt.ylabel("Anzahl der Verletzten")
@@ -450,8 +450,8 @@ plt.tight_layout()
 plt.show()
 
 # Piechart: Waffenstatus
-theft_counts = top10["gun_stolen"].fillna("Unknown").value_counts()
-plt.figure(figsize=(8, 8))
+theft_counts = top10["num_stolen_weapons"].fillna("Unknown").value_counts()
+plt.figure(figsize=(30, 30))
 plt.pie(theft_counts, labels=theft_counts.index, autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung der Waffenstatus (Top 10 gefährlichste Restaurants)")
 plt.tight_layout()
