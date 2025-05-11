@@ -466,10 +466,65 @@ plt.show()
 # Entferne Zeilen mit fehlenden Werten in den interessierenden Spalten
 df_gun_clean = df_gun.dropna(subset=["gun_type", "gun_stolen"])
 
-# Hilfsfunktion zum Extrahieren von Einträgen
+# Hilfsfunktion
 def extract_entries(entry):
     return [item.split("::")[1].strip() if "::" in item else item.strip()
             for item in str(entry).split("||")]
+
+# 🔍 Mapping von konkreten Waffentypen zu Kategorien
+def classify_gun_type(gun):
+    gun = gun.lower()
+    if "handgun" in gun or "pistol" in gun or "revolver" in gun:
+        return "Handgun"
+    elif "rifle" in gun or "ak" in gun or "ar-" in gun or "7.62" in gun or "carbine" in gun:
+        return "Rifle"
+    elif "shotgun" in gun:
+        return "Shotgun"
+    elif "bb gun" in gun or "air" in gun:
+        return "Airgun"
+    elif "unknown" in gun:
+        return "Unknown"
+    else:
+        return "Other"
+
+# === Alle Kombinationen extrahieren ===
+type_list, stolen_list, classified_list = [], [], []
+
+for _, row in df_gun_clean.iterrows():
+    types = extract_entries(row["gun_type"])
+    stolen = extract_entries(row["gun_stolen"])
+    for t, s in zip(types, stolen):
+        type_list.append(t)
+        stolen_list.append(s)
+        classified_list.append(classify_gun_type(t))
+
+# In DataFrame umwandeln
+df_comb = pd.DataFrame({
+    "gun_type": type_list,
+    "gun_stolen": stolen_list,
+    "gun_class": classified_list
+})
+
+# === Klassifikationstabelle ===
+classification_table = pd.crosstab(df_comb["gun_class"], df_comb["gun_stolen"])
+classification_table.to_excel("gun_classification.xlsx")
+print("✔ gun_classification.xlsx wurde gespeichert.")
+
+# === Kuchendiagramm 1: Waffenstatus ===
+plt.figure(figsize=(10, 10))
+df_comb["gun_stolen"].value_counts().plot.pie(autopct='%1.1f%%', startangle=140)
+plt.title("Verteilung Waffenstatus (gun_stolen)")
+plt.ylabel("")
+plt.tight_layout()
+plt.show()
+
+# === Kuchendiagramm 2: Klassifizierte Waffentypen ===
+plt.figure(figsize=(10, 10))
+df_comb["gun_class"].value_counts().plot.pie(autopct='%1.1f%%', startangle=140)
+plt.title("Verteilung klassifizierter Waffentypen")
+plt.ylabel("")
+plt.tight_layout()
+plt.show()
 
 # Piechart für gun_stolen (nur diese Spalte)
 stolen_all = []
@@ -493,7 +548,7 @@ plt.figure(figsize=(18, 18))
 plt.pie(df_types, labels=df_types.index, autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung der Waffentypen (gun_type)")
 plt.tight_layout()
-
+plt.show()
 
 # Heatmap USA mit Restaurantvorfällen (Farben grün-gelb-rot je nach Anzahl)
 geometry = [Point(xy) for xy in zip(summary_df["restaurant_latitude"], summary_df["restaurant_latitude"])]
