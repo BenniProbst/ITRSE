@@ -371,8 +371,18 @@ for _, restaurant in gdf_fast.iterrows():
 # Waffengewalt auswerten
 
 # DataFrame für Übersichtstabelle
-summary_path = path2 + "gun_violence_at_restaurant_results.xlsx"
+summary_path = path2 + "\\gun_violence_at_restaurant_results.xlsx"
 summary_df = pd.DataFrame(summary_data)
+
+# Neue Spalte: Anzahl gestohlener Waffen (außer "Unknown")
+def count_stolen_weapons(gun_dict):
+    if not isinstance(gun_dict, dict):
+        return 0
+    return sum(v for k, v in gun_dict.items() if k.lower() not in ["unknown", ""])
+
+summary_df["num_stolen_weapons"] = summary_df["gun_stolen_counts"].apply(count_stolen_weapons)
+
+# Gesamtergebnis zwischenspeichern
 summary_df.to_excel(summary_path, index=False)
 
 # Sortiere nach den gewünschten Kriterien
@@ -383,9 +393,7 @@ top10 = summary_df.sort_values(
 
 # Ausgabe mit pretty print
 pp = pprint.PrettyPrinter(depth=3, sort_dicts=False)
-pp.pprint(top10[[
-    "Restaurant Name", "Address", "Total Incidents", "Total Killed", "Total Injured"
-]].to_dict(orient="records"))
+pp.pprint(top10[["name", "address", "num_incidents", "total_killed", "total_injured"]].to_dict(orient="records"))
 
 # Plotting Charts and Heat maps
 
