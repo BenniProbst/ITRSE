@@ -16,6 +16,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 import matplotlib.colors as mathcolors
+import contextily as ctx
 
 from tqdm import tqdm
 from threading import Lock
@@ -507,7 +508,7 @@ df_comb = pd.DataFrame({
 
 # === Klassifikationstabelle ===
 classification_table = pd.crosstab(df_comb["gun_class"], df_comb["gun_stolen"])
-classification_table.to_excel("gun_classification.xlsx")
+classification_table.to_excel(path2 + "\\gun_classification.xlsx")
 print("✔ gun_classification.xlsx wurde gespeichert.")
 
 # === Kuchendiagramm 1: Waffenstatus ===
@@ -551,38 +552,33 @@ plt.tight_layout()
 plt.show()
 
 # Heatmap USA mit Restaurantvorfällen (Farben grün-gelb-rot je nach Anzahl)
-geometry = [Point(xy) for xy in zip(summary_df["restaurant_latitude"], summary_df["restaurant_latitude"])]
+# Erzeuge GeoDataFrame mit korrekten Koordinaten
+geometry = [Point(xy) for xy in zip(summary_df["restaurant_longitude"], summary_df["restaurant_latitude"])]
 gdf = geopandas.GeoDataFrame(summary_df, geometry=geometry, crs="EPSG:4326").to_crs(epsg=3857)
 
-# Farbskala zwischen 0 und max incidents
-# Normierung der Anzahl der Vorfälle (z. B. in gdf['num_incidents'])
+# Farbskala und Normalisierung
 incident_counts = gdf["num_incidents"]
 max_incidents = incident_counts.max()
-
-# Farbverlauf manuell definieren: Grün (wenig) → Gelb (mittel) → Rot (viel)
-cmap = mathcolors.LinearSegmentedColormap.from_list(
-    "custom_green_red", ["green", "yellow", "red"]
-)
-
-# Normalisierungsfunktion für Farbverlauf
+cmap = mathcolors.LinearSegmentedColormap.from_list("custom_green_red", ["green", "yellow", "red"])
 norm = mathcolors.Normalize(vmin=0, vmax=max_incidents)
-
-# Farben für jeden Punkt berechnen
 colors = [cmap(norm(x)) for x in incident_counts]
 
-# Zeichne Karte
-fig5, ax5 = plt.subplots(figsize=(40, 40))
-gdf.plot(ax=ax5, color=colors, markersize=20, alpha=0.7)
-ax5.set_title("US Heatmap of Gun Violence at Restaurants (Color = #Incidents)")
-ax5.axis('off')
+# Plot mit Basiskarte (z. B. OpenStreetMap)
+fig, ax = plt.subplots(figsize=(20, 15))
+gdf.plot(ax=ax, color=colors, markersize=20, alpha=0.7)
+ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
 
-# Colorbar (Legende) anzeigen
+ax.set_title("US Map of Gun Violence at Restaurants (Color = #Incidents)")
+ax.axis('off')
+
+# Colorbar hinzufügen
 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])
-cbar = plt.colorbar(sm, ax=ax5, fraction=0.03, pad=0.04)
+cbar = fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
 cbar.set_label("Number of Incidents")
 
 plt.tight_layout()
+plt.show()
 
 # Anzeigen
 plt.show()
