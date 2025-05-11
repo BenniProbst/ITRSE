@@ -431,6 +431,12 @@ plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.show()
 
+# Sortiere nach den gewünschten Kriterien
+top10 = summary_df.sort_values(
+    by=["total_killed", "total_injured", "num_stolen_weapons", "num_incidents"],
+    ascending=[False, False, False, False]
+).head(10)
+
 # Barplot 2: Anzahl der Toten
 plt.figure(figsize=(12, 10))
 plt.bar(top10["name"] + " @ " + top10["city"] + " - " + top10["state"] + ", " + top10["address"], top10["total_killed"])
@@ -439,6 +445,12 @@ plt.ylabel("Anzahl der Toten")
 plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.show()
+
+# Sortiere nach den gewünschten Kriterien
+top10 = summary_df.sort_values(
+    by=["total_injured", "num_stolen_weapons", "num_incidents", "total_killed"],
+    ascending=[False, False, False, False]
+).head(10)
 
 # Barplot 3: Anzahl der Verletzten
 plt.figure(figsize=(12, 10))
@@ -450,10 +462,36 @@ plt.tight_layout()
 plt.show()
 
 # Piechart: Waffenstatus
-theft_counts = top10["num_stolen_weapons"].fillna("Unknown").value_counts()
-plt.figure(figsize=(30, 30))
-plt.pie(theft_counts, labels=theft_counts.index, autopct='%1.1f%%', startangle=140)
-plt.title("Verteilung der Waffenstatus (Top 10 gefährlichste Restaurants)")
+
+# Entferne Zeilen mit fehlenden Werten in den interessierenden Spalten
+df_gun_clean = df_gun.dropna(subset=["gun_type", "gun_stolen"])
+
+# Hilfsfunktion zum Extrahieren von Einträgen
+def extract_entries(entry):
+    return [item.split("::")[1].strip() if "::" in item else item.strip()
+            for item in str(entry).split("||")]
+
+# Piechart für gun_stolen (nur diese Spalte)
+stolen_all = []
+for entry in df_gun_clean["gun_stolen"]:
+    stolen_all.extend(extract_entries(entry))
+
+df_stolen = pd.Series(stolen_all).value_counts()
+plt.figure(figsize=(18, 18))
+plt.pie(df_stolen, labels=df_stolen.index, autopct='%1.1f%%', startangle=140)
+plt.title("Verteilung des Waffenstatus (gun_stolen)")
+plt.tight_layout()
+plt.show()
+
+# Piechart für gun_type (nur diese Spalte)
+type_all = []
+for entry in df_gun_clean["gun_type"]:
+    type_all.extend(extract_entries(entry))
+
+df_types = pd.Series(type_all).value_counts()
+plt.figure(figsize=(18, 18))
+plt.pie(df_types, labels=df_types.index, autopct='%1.1f%%', startangle=140)
+plt.title("Verteilung der Waffentypen (gun_type)")
 plt.tight_layout()
 
 
