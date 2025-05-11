@@ -1,6 +1,5 @@
 # Put the data loading code here
 # After loading, print out a sample of the raw data as it was loaded
-
 # Install dependencies as needed:
 # pip install kagglehub[pandas-datasets]
 import geopandas
@@ -11,6 +10,7 @@ import os
 import glob
 import os.path
 import openpyxl
+import datetime
 
 # Eat healthy - stay alive
 
@@ -138,18 +138,18 @@ print("Path to dataset files for gun violence:", path2)
 csv_files2 = glob.glob(os.path.join(path2, "*.csv"))
 
 # 1. Riesige CSV-Dateien einlesen und Auswertung mit Fastfood restaurants vorbereiten
-df_acc = pd.read_csv(path2 + "\\gun-violence-data_01-2013_03-2018.csv")
+df_gun = pd.read_csv(path2 + "\\gun-violence-data_01-2013_03-2018.csv")
 
 # Entferne Zeilen mit fehlenden Koordinaten
 df_fast = df_fast.dropna(subset=["latitude", "longitude"])
-df_acc = df_acc.dropna(subset=["latitude", "longitude"])
+df_gun = df_gun.dropna(subset=["latitude", "longitude"])
 
 # in excel schreiben
 
 chunk_size = 1_000_000
 if not os.path.exists(path2 + "\\gun-violence-data_01-2013_03-2018_Part1.xlsx"):
-    for i in range(0, len(df_acc), chunk_size):
-        chunk = df_acc.iloc[i:i+chunk_size]
+    for i in range(0, len(df_gun), chunk_size):
+        chunk = df_gun.iloc[i:i + chunk_size]
         file_name = path2 + f"\\gun-violence-data_01-2013_03-2018_Part{i//chunk_size + 1}.xlsx"
         chunk.to_excel(file_name, index=False)
         print(f"Gespeichert: {file_name}")
@@ -160,67 +160,44 @@ print("-------------------Fundamental Exploration of Datasets-------------------
 # Spaltennamen ausgeben
 # Spaltennamen ausgeben
 print(df_fast.columns.tolist())
-print(df_acc.columns.tolist())
+print(df_gun.columns.tolist())
 
-# === Hilfsfunktionen ===
+# === Statistikfunktionen ===
 def explore_numerical(df, col):
     data = df[col].dropna()
-    min_val = data.min()
-    max_val = data.max()
-    mean_val = data.mean()
-    std_val = data.std()
-
-    # Indizes für exakte oder numerisch ähnliche Werte
-    min_indices = data[data == min_val].index.tolist()
-    max_indices = data[data == max_val].index.tolist()
-    mean_indices = data[np.isclose(data, mean_val)].index.tolist()
-
     return {
         "count": len(data),
-        "min": min_val,
-        "max": max_val,
-        "mean": mean_val,
-        "std": std_val,
-        "min_indices": min_indices or "None found",
-        "max_indices": max_indices or "None found",
-        "mean_indices": mean_indices or "None found"
+        "min": data.min(),
+        "max": data.max(),
+        "mean": data.mean(),
+        "std": data.std(),
+        "min_indices": data[data == data.min()].index.tolist() or "None found",
+        "max_indices": data[data == data.max()].index.tolist() or "None found",
+        "mean_indices": data[np.isclose(data, data.mean())].index.tolist() or "None found"
     }
-
 
 def explore_categorical(df, col, max_categories=20):
     vc = df[col].value_counts(dropna=False)
     top = vc.head(max_categories).to_dict()
     if len(vc) > max_categories:
-        top['__other__'] = vc.iloc[max_categories:].sum()
+        top["__other__"] = vc.iloc[max_categories:].sum()
     return top
 
 def explore_datetime(df, col):
     try:
-        if 'T' in df[col].dropna().astype(str).iloc[0]:
-            data = pd.to_datetime(df[col], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce').dropna()
-        else:
-            data = pd.to_datetime(df[col], format='%Y-%m-%d %H:%M:%S', errors='coerce').dropna()
+        data = pd.to_datetime(df[col], errors="coerce").dropna()
     except Exception:
-        data = pd.to_datetime(df[col], errors='coerce').dropna()
-
+        data = pd.to_datetime(df[col], errors="coerce").dropna()
     if data.empty:
         return {"valid_dates": 0}
     delta = (data.max() - data.min()).days
-    result = {
+    return {
         "start": str(data.min()),
         "end": str(data.max()),
         "days": delta,
         "total_entries": len(data),
         "avg_entries_per_day": round(len(data)/delta, 2) if delta > 0 else np.nan
     }
-    if 'Start_Time' in df.columns and 'End_Time' in df.columns:
-        start_times = pd.to_datetime(df['Start_Time'], errors='coerce')
-        end_times = pd.to_datetime(df['End_Time'], errors='coerce')
-        durations = (end_times - start_times).dt.total_seconds() / 3600  # in Stunden
-        durations = durations.dropna()
-        result["avg_duration_hours"] = durations.mean()
-        result["std_duration_hours"] = durations.std()
-    return result
 
 def explore_text(df, col):
     data = df[col].dropna().astype(str)
@@ -277,20 +254,23 @@ print("-------------------Analyse of Fastfood Dataset-------------------")
 print("Gun Violence Dataset Analysis:")
 report = {'accidents': {}}
 
-for col in df_acc.columns:
-    if col in excluded_columns['accidents']:
-        continue
-    if df_acc[col].dtype in ['float64', 'int64']:
-        report['accidents'][col] = explore_numerical(df_acc, col)
-    elif 'time' in col.lower() or 'timestamp' in col.lower():
-        report['accidents'][col] = explore_datetime(df_acc, col)
-    elif df_acc[col].dtype == 'object':
-        if col in ['Description']:
-            report['accidents'][col] = explore_text(df_acc, col)
-        else:
-            report['accidents'][col] = explore_categorical(df_acc, col, max_categories=55)
+# === Analyse der Waffengewalt ===
+print("Analyse Gun Violence Dataset:")
+report = {"gun_violence": {}}
 
+for col in df_gun.columns:
+    if col in ["incident_id"]:
+        continue
+    if df_gun[col].dtype in ["float64", "int64"]:
+        report["gun_violence"][col] = explore_numerical(df_gun, col)
+    elif "date" in col.lower():
+        report["gun_violence"][col] = explore_datetime(df_gun, col)
+    elif df_gun[col].dtype == "object":
+        report["gun_violence"][col] = explore_categorical(df_gun, col, max_categories=55)
+
+pp = pprint.PrettyPrinter(depth=3, sort_dicts=False, compact=True)
 pp.pprint(report)
+
 print("-------------------Analyse of Gun Violence Dataset-------------------")
 
 # berechnet die nächste Entfernung eines Unfalls zu einem Fastfood-Restaurant und stelle die top 10 der
@@ -304,9 +284,9 @@ gdf_fast = geopandas.GeoDataFrame(
     crs="EPSG:4326"
 ).to_crs(epsg=3857)
 
-gdf_acc = geopandas.GeoDataFrame(
-    df_acc,
-    geometry=geopandas.points_from_xy(df_acc["longitude"], df_acc["latitude"]),
+gdf_gun = geopandas.GeoDataFrame(
+    df_gun,
+    geometry=geopandas.points_from_xy(df_gun["longitude"], df_gun["latitude"]),
     crs="EPSG:4326"
 ).to_crs(epsg=3857)
 
@@ -320,31 +300,35 @@ else:
 
 distance_threshold_m = 300
 
-# === Zuordnung und Speicherung ===
-for idx, restaurant in gdf_fast.iterrows():
-    restaurant_geom = restaurant.geometry
-    nearby_accidents = gdf_acc[gdf_acc.distance(restaurant_geom) <= distance_threshold_m].copy()
+# === Pro Restaurant nahe Vorfälle finden ===
+for _, restaurant in gdf_fast.iterrows():
+    x, y = restaurant.geometry.x, restaurant.geometry.y
+    candidates = gdf_gun[
+        (gdf_gun.geometry.x >= x - 300) & (gdf_gun.geometry.x <= x + 300) &
+        (gdf_gun.geometry.y >= y - 300) & (gdf_gun.geometry.y <= y + 300)
+    ]
+    nearby = candidates[candidates.distance(restaurant.geometry) <= 300].copy()
+    if "geometry" in nearby.columns:
+        nearby.drop(columns=["geometry"], inplace=True)
 
-    state = restaurant['province'].replace(" ", "_") if pd.notna(restaurant['province']) else "Unknown"
-    plz = str(restaurant['postalCode']).replace(" ", "_") if pd.notna(restaurant['postalCode']) else "Unknown"
-    city = restaurant['city'].replace(" ", "_") if pd.notna(restaurant['city']) else "Unknown"
-    street = restaurant['address'].replace(" ", "_") if pd.notna(restaurant['address']) else "Unknown"
-    name = restaurant['name'].replace(" ", "_").replace("/", "_")
-    date = pd.Timestamp.now().strftime("%Y%m%d")
+    first_date = restaurant.get("dateAdded", None)
+    if pd.notna(first_date):
+        try:
+            parsed_date = pd.to_datetime(first_date)
+            date_str = parsed_date.strftime("%Y%m%d")
+        except Exception:
+            date_str = datetime.now().strftime("%Y%m%d")
+    else:
+        date_str = datetime.now().strftime("%Y%m%d")
 
-    filename = f"{date} (Aktualisiert), {name}, Adresse_{state}_{plz}_{city}_{street}.xlsx"
+    name = str(restaurant["name"]).replace(" ", "_").replace("/", "_")
+    state = str(restaurant.get("province", "Unknown")).replace(" ", "_")
+    plz = str(restaurant.get("postalCode", "Unknown")).replace(" ", "_")
+    city = str(restaurant.get("city", "Unknown")).replace(" ", "_")
+    street = str(restaurant.get("address", "Unknown")).replace(" ", "_")
+
+    filename = f"{date_str}, {name}, at {state}_{plz}_{city}_{street}.xlsx"
     filepath = os.path.join(output_dir, filename)
 
-    columns_to_save = [
-        'ID', 'Source', 'Severity', 'Start_Time', 'End_Time', 'Start_Lat', 'Start_Lng', 'End_Lat', 'End_Lng',
-        'Distance(mi)', 'Description', 'Street', 'City', 'County', 'State', 'Zipcode', 'Country', 'Timezone',
-        'Airport_Code', 'Weather_Timestamp', 'Temperature(F)', 'Wind_Chill(F)', 'Humidity(%)', 'Pressure(in)',
-        'Visibility(mi)', 'Wind_Direction', 'Wind_Speed(mph)', 'Precipitation(in)', 'Weather_Condition',
-        'Amenity', 'Bump', 'Crossing', 'Give_Way', 'Junction', 'No_Exit', 'Railway', 'Roundabout', 'Station',
-        'Stop', 'Traffic_Calming', 'Traffic_Signal', 'Turning_Loop', 'Sunrise_Sunset', 'Civil_Twilight',
-        'Nautical_Twilight', 'Astronomical_Twilight', 'mid_lat', 'mid_lng'
-    ]
-    # Sicherstellen, dass Spalten existieren
-    existing_columns = [col for col in columns_to_save if col in nearby_accidents.columns]
-    nearby_accidents[existing_columns].to_excel(filepath, index=False)
+    nearby.to_excel(filepath, index=False)
 
