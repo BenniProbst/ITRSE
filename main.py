@@ -399,8 +399,8 @@ pp.pprint(top10[["name", "address", "num_incidents", "total_killed", "total_inju
 
 # Barplot 1: Anzahl der Vorfälle
 plt.figure(figsize=(12, 6))
-plt.bar(top10["restaurant_name"], top10["num_incidents"])
-plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Vorfälle")
+plt.bar(top10["name"] + " @ " + top10["city"] + " - " + top10["state"] + ", " + top10["address"], top10["num_incidents"])
+plt.title("Top 10 gefährlichste Restaurants in den USA nach Anzahl der Vorfälle")
 plt.ylabel("Anzahl der Vorfälle")
 plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
@@ -408,7 +408,7 @@ plt.show()
 
 # Barplot 2: Anzahl der Toten
 plt.figure(figsize=(12, 6))
-plt.bar(top10["restaurant_name"], top10["total_killed"])
+plt.bar(top10["name"] + " @ " + top10["city"] + " - " + top10["state"] + ", " + top10["address"], top10["total_killed"])
 plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Toten")
 plt.ylabel("Anzahl der Toten")
 plt.xticks(rotation=45, ha='right')
@@ -417,7 +417,7 @@ plt.show()
 
 # Barplot 3: Anzahl der Verletzten
 plt.figure(figsize=(12, 6))
-plt.bar(top10["restaurant_name"], top10["total_injured"])
+plt.bar(top10["name"] + " @ " + top10["city"] + " - " + top10["state"] + ", " + top10["address"], top10["total_injured"])
 plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Verletzten")
 plt.ylabel("Anzahl der Verletzten")
 plt.xticks(rotation=45, ha='right')
