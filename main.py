@@ -478,7 +478,7 @@ norm = mathcolors.Normalize(vmin=0, vmax=max_incidents)
 colors = [cmap(norm(x)) for x in incident_counts]
 
 # Zeichne Karte
-fig5, ax5 = plt.subplots(figsize=(16, 10))
+fig5, ax5 = plt.subplots(figsize=(40, 40))
 gdf.plot(ax=ax5, color=colors, markersize=20, alpha=0.7)
 ax5.set_title("US Heatmap of Gun Violence at Restaurants (Color = #Incidents)")
 ax5.axis('off')
