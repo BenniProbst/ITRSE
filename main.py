@@ -387,7 +387,7 @@ summary_df.to_excel(summary_path, index=False)
 
 # Sortiere nach den gewünschten Kriterien
 top10 = summary_df.sort_values(
-    by=["num_incidents", "total_killed", "total_injured", "gun_stolen_counts"],
+    by=["num_incidents", "total_killed", "total_injured", "num_stolen_weapons"],
     ascending=[False, False, False, False]
 ).head(10)
 
