@@ -11,6 +11,8 @@ import glob
 import os.path
 import openpyxl
 from datetime import datetime
+import matplotlib.pyplot as plt
+from shapely.geometry import Point
 
 # Eat healthy - stay alive
 
@@ -296,7 +298,10 @@ else:
 
 distance_threshold_m = 300
 
-# === Pro Restaurant nahe Vorfälle finden ===
+# === Pro Restaurant nahe Vorfälle finden und Gesamtergebnis auswerten ===
+
+# Übersicht initialisieren
+summary_data = []
 
 count = 1
 for _, restaurant in gdf_fast.iterrows():
@@ -307,7 +312,7 @@ for _, restaurant in gdf_fast.iterrows():
     street = str(restaurant.get("address", "Unknown")).replace(" ", "_")
 
     filename_search = f"{name}, at {state}_{plz}_{city}_{street}"
-    print(f"Searching for accidents near {filename_search}, {count} of {len(df_fast)} searched...")
+    print(f"Searching for gun incident near {filename_search}, {count} of {len(df_fast)} searched...")
 
     x, y = restaurant.geometry.x, restaurant.geometry.y
     candidates = gdf_gun[
@@ -315,6 +320,12 @@ for _, restaurant in gdf_fast.iterrows():
         (gdf_gun.geometry.y >= y - 300) & (gdf_gun.geometry.y <= y + 300)
     ]
     nearby = candidates[candidates.distance(restaurant.geometry) <= 300].copy()
+
+    # Füge die Distanzspalte hinzu
+    nearby["incident distance"] = nearby.geometry.distance(restaurant.geometry)
+
+    # Füge Spalte für gestohlene Waffen hinzu (NaN ersetzen)
+    nearby["gun_stolen"] = nearby["gun_stolen"].fillna("Unknown")
 
     count += 1
 
@@ -338,5 +349,95 @@ for _, restaurant in gdf_fast.iterrows():
     filepath = os.path.join(output_dir, filename)
 
     nearby.to_excel(filepath, index=False)
-    print(f"Created report for {filename}")
 
+    # Statistikdaten für Übersichtstabelle
+    summary_data.append({
+        "name": restaurant["name"],
+        "address": restaurant["address"],
+        "state": state,
+        "city": city,
+        "postalCode": plz,
+        "num_incidents": len(nearby),
+        "total_killed": nearby["n_killed"].sum(),
+        "total_injured": nearby["n_injured"].sum(),
+        "gun_stolen_counts": nearby["gun_stolen"].value_counts().to_dict(),
+        "restaurant_latitude": restaurant["latitude"],
+        "restaurant_longitude": restaurant["longitude"]
+    })
+
+    print(f"Created gun incident report for {filename}")
+
+# Waffengewalt auswerten
+
+# DataFrame für Übersichtstabelle
+summary_path = path2 + "gun_violence_at_restaurant_results.xlsx"
+summary_df = pd.DataFrame(summary_data)
+summary_df.to_excel(summary_path, index=False)
+
+# Sortiere nach den gewünschten Kriterien
+top10 = summary_df.sort_values(
+    by=["num_incidents", "total_killed", "total_injured", "gun_stolen_counts"],
+    ascending=[False, False, False, False]
+).head(10)
+
+# Ausgabe mit pretty print
+pp = pprint.PrettyPrinter(depth=3, sort_dicts=False)
+pp.pprint(top10[[
+    "Restaurant Name", "Address", "Total Incidents", "Total Killed", "Total Injured"
+]].to_dict(orient="records"))
+
+# Plotting Charts and Heat maps
+
+# Barplot 1: Anzahl der Vorfälle
+plt.figure(figsize=(12, 6))
+plt.bar(top10["restaurant_name"], top10["num_incidents"])
+plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Vorfälle")
+plt.ylabel("Anzahl der Vorfälle")
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+# Barplot 2: Anzahl der Toten
+plt.figure(figsize=(12, 6))
+plt.bar(top10["restaurant_name"], top10["total_killed"])
+plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Toten")
+plt.ylabel("Anzahl der Toten")
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+# Barplot 3: Anzahl der Verletzten
+plt.figure(figsize=(12, 6))
+plt.bar(top10["restaurant_name"], top10["total_injured"])
+plt.title("Top 10 gefährlichste Restaurants nach Anzahl der Verletzten")
+plt.ylabel("Anzahl der Verletzten")
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+# Piechart: Waffenstatus
+theft_counts = top10["gun_stolen"].fillna("Unknown").value_counts()
+plt.figure(figsize=(8, 8))
+plt.pie(theft_counts, labels=theft_counts.index, autopct='%1.1f%%', startangle=140)
+plt.title("Verteilung der Waffenstatus (Top 10 gefährlichste Restaurants)")
+plt.tight_layout()
+
+
+# Heatmap USA mit Restaurantvorfällen (Farben grün-gelb-rot je nach Anzahl)
+geometry = [Point(xy) for xy in zip(summary_df["restaurant_latitude"], summary_df["restaurant_latitude"])]
+gdf = geopandas.GeoDataFrame(summary_df, geometry=geometry, crs="EPSG:4326")
+gdf = gdf.to_crs(epsg=3857)
+
+# Farbskala zwischen 0 und max incidents
+max_incidents = gdf["Total Incidents"].max()
+colors = plt.cm.RdYlGn_r(gdf["Total Incidents"] / max_incidents)
+
+# Zeichne Karte
+fig5, ax5 = plt.subplots(figsize=(16, 10))
+gdf.plot(ax=ax5, color=colors, markersize=20, alpha=0.7)
+ax5.set_title("US Heatmap of Gun Violence at Restaurants (Color = #Incidents)")
+ax5.axis('off')
+plt.tight_layout()
+
+# Anzeigen
+plt.show()
