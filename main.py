@@ -13,6 +13,7 @@ import openpyxl
 from datetime import datetime
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
+import matplotlib.colors as mcolors
 
 # Eat healthy - stay alive
 
@@ -425,18 +426,36 @@ plt.tight_layout()
 
 # Heatmap USA mit Restaurantvorfällen (Farben grün-gelb-rot je nach Anzahl)
 geometry = [Point(xy) for xy in zip(summary_df["restaurant_latitude"], summary_df["restaurant_latitude"])]
-gdf = geopandas.GeoDataFrame(summary_df, geometry=geometry, crs="EPSG:4326")
-gdf = gdf.to_crs(epsg=3857)
+gdf = geopandas.GeoDataFrame(summary_df, geometry=geometry, crs="EPSG:4326").to_crs(epsg=3857)
 
 # Farbskala zwischen 0 und max incidents
-max_incidents = gdf["Total Incidents"].max()
-colors = plt.cm.RdYlGn_r(gdf["Total Incidents"] / max_incidents)
+# Normierung der Anzahl der Vorfälle (z. B. in gdf['num_incidents'])
+incident_counts = gdf["num_incidents"]
+max_incidents = incident_counts.max()
+
+# Farbverlauf manuell definieren: Grün (wenig) → Gelb (mittel) → Rot (viel)
+cmap = mcolors.LinearSegmentedColormap.from_list(
+    "custom_green_red", ["green", "yellow", "red"]
+)
+
+# Normalisierungsfunktion für Farbverlauf
+norm = mcolors.Normalize(vmin=0, vmax=max_incidents)
+
+# Farben für jeden Punkt berechnen
+colors = [cmap(norm(x)) for x in incident_counts]
 
 # Zeichne Karte
 fig5, ax5 = plt.subplots(figsize=(16, 10))
 gdf.plot(ax=ax5, color=colors, markersize=20, alpha=0.7)
 ax5.set_title("US Heatmap of Gun Violence at Restaurants (Color = #Incidents)")
 ax5.axis('off')
+
+# Colorbar (Legende) anzeigen
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+sm.set_array([])
+cbar = plt.colorbar(sm, ax=ax5, fraction=0.03, pad=0.04)
+cbar.set_label("Number of Incidents")
+
 plt.tight_layout()
 
 # Anzeigen
