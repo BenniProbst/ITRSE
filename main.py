@@ -2,6 +2,8 @@
 # After loading, print out a sample of the raw data as it was loaded
 # Install dependencies as needed:
 # pip install kagglehub[pandas-datasets]
+import threading
+
 import geopandas
 import kagglehub
 import numpy as np
@@ -14,9 +16,11 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 import matplotlib.colors as mathcolors
+
+from tqdm import tqdm
+from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
-from tqdm import tqdm
 
 # Eat healthy - stay alive
 
@@ -302,14 +306,13 @@ else:
 
 # === Pro Restaurant nahe Vorfälle finden und Gesamtergebnis auswerten ===
 
-# Übersicht initialisieren und mit multithreading verarbeiten
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import multiprocessing
-
 # Funktion zur Verarbeitung eines einzelnen Restaurants
-def process_restaurant(restaurant):
+# Zähler und Sperre für Threads
+completed_count = [0]  # mutable counter
+count_lock = threading.Lock()
+def process_restaurant(restaurant, count_lock, completed_count_list, total_count):
     distance_threshold_m = 300
+
     try:
         name = str(restaurant["name"]).replace(" ", "_").replace("/", "_")
         state = str(restaurant.get("province", "Unknown")).replace(" ", "_")
@@ -327,7 +330,10 @@ def process_restaurant(restaurant):
         ]
         nearby = candidates[candidates.distance(restaurant.geometry) <= distance_threshold_m].copy()
 
+        # Füge die Distanzspalte hinzu
         nearby["incident distance"] = nearby.geometry.distance(restaurant.geometry)
+
+        # Füge Spalte für gestohlene Waffen hinzu (NaN ersetzen)
         nearby["gun_stolen"] = nearby["gun_stolen"].fillna("Unknown")
 
         if len(nearby) == 0:
@@ -348,7 +354,12 @@ def process_restaurant(restaurant):
 
         filename = f"{date_str}, {name}, at {state}_{plz}_{city}_{street}.xlsx"
         filepath = os.path.join(output_dir, filename)
+
         nearby.to_excel(filepath, index=False)
+
+        with count_lock:
+            completed_count_list[0] += 1
+            print(f"Created gun incident report for {filename} ({completed_count_list[0]} of {total_count})")
 
         return {
             "name": restaurant["name"],
@@ -364,14 +375,19 @@ def process_restaurant(restaurant):
             "restaurant_longitude": restaurant["longitude"]
         }
     except Exception as e:
-        print(f"Error processing restaurant: {e}")
+        with count_lock:
+            completed_count_list[0] += 1
+            print(f"Error processing restaurant ({completed_count_list[0]} of {total_count}): {e}")
         return None
 
 # Nutze alle verfügbaren Threads
 summary_data = []
 num_threads = multiprocessing.cpu_count()
 with ThreadPoolExecutor(max_workers=num_threads) as executor:
-    futures = [executor.submit(process_restaurant, row) for _, row in gdf_fast.iterrows()]
+    futures = [
+        executor.submit(process_restaurant, row, count_lock, completed_count, len(gdf_fast))
+        for _, row in gdf_fast.iterrows()
+    ]
     for future in as_completed(futures):
         result = future.result()
         if result:
