@@ -570,34 +570,34 @@ gdf_without_incidents = geopandas.GeoDataFrame(summary_df_without_incidents, geo
 incident_counts = gdf_with_incidents["num_incidents"]
 max_incidents = incident_counts.max()
 
-# Transformation: z. B. log oder sqrt für empfindlicheren Verlauf
-# Hier: sqrt → empfindlich bei niedrigen Werten, langsam bei hohen
+# Transformation (Wurzel für Farbsensitivität)
 transformed = np.sqrt(incident_counts)
 max_trans = np.sqrt(max_incidents)
 
-# Farbverlauf grün → gelb → rot
+# Farbverlauf
 cmap = mathcolors.LinearSegmentedColormap.from_list("custom_green_red", ["green", "yellow", "red"])
 norm = mathcolors.Normalize(vmin=0, vmax=max_trans)
-colors = [cmap(norm(x)) for x in incident_counts]
+colors = [cmap(norm(x)) for x in transformed]  # benutze transformierte Werte für Farbe
 
-# Plot mit Basiskarte (z. B. OpenStreetMap)
+# Plot
 fig, ax = plt.subplots(figsize=(20, 15))
-# Zeichne blaue Punkte für Restaurants ohne Vorfälle
 gdf_without_incidents.plot(ax=ax, color="blue", markersize=10, alpha=0.5)
 gdf_with_incidents.plot(ax=ax, color=colors, markersize=20, alpha=0.7)
 ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
-
 ax.set_title("US Map of Gun Violence at Restaurants (Color = #Incidents)")
 ax.axis('off')
 
-# Colorbar hinzufügen
+# Colorbar mit originalen Werten beschriften
+# Werte von 0 bis max_incidents, skaliert über sqrt
+tick_values = np.linspace(0, max_incidents, num=6)  # z.B. [0, 10, 20, 30, 40, 50]
+tick_positions = np.sqrt(tick_values)               # transformierte Positionen auf Farbskala
+
 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])
-cbar = fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+
+cbar = fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.04, ticks=tick_positions)
+cbar.ax.set_yticklabels([f"{int(val)}" for val in tick_values])
 cbar.set_label("Number of Incidents")
 
 plt.tight_layout()
-plt.show()
-
-# Anzeigen
 plt.show()
