@@ -31,6 +31,7 @@ import multiprocessing
 
 # https://www.kaggle.com/code/shivamb/deep-exploration-of-gun-violence-in-us/input?select=gun-violence-data_01-2013_03-2018.csv
 
+# Merge an Kategorien, Bereinigung
 def fill_primary_categories(row):
     if pd.isna(row['primaryCategories']) or str(row['primaryCategories']).strip() == '':
         if row['_merge'] == 'right_only':
@@ -39,6 +40,27 @@ def fill_primary_categories(row):
             return row['primaryCategories_x']
     else:
         return row['primaryCategories']  # vorhandener Wert bleibt
+
+# Hilfsfunktion Gun Types
+def extract_entries(entry):
+    return [item.split("::")[1].strip() if "::" in item else item.strip()
+            for item in str(entry).split("||")]
+
+# 🔍 Mapping von konkreten Waffentypen zu Kategorien
+def classify_gun_type(gun):
+    gun = gun.lower()
+    if "handgun" in gun or "pistol" in gun or "revolver" in gun:
+        return "Handgun"
+    elif "rifle" in gun or "ak" in gun or "ar-" in gun or "7.62" in gun or "carbine" in gun:
+        return "Rifle"
+    elif "shotgun" in gun:
+        return "Shotgun"
+    elif "bb gun" in gun or "air" in gun:
+        return "Airgun"
+    elif "unknown" in gun:
+        return "Unknown"
+    else:
+        return "Other"
 
 print("-------------------Download Datasets-------------------")
 
@@ -311,6 +333,10 @@ else:
 # Zähler und Sperre für Threads
 completed_count = [0]  # mutable counter
 count_lock = threading.Lock()
+
+summary_data_with_incidents = []
+summary_data_without_incidents = []
+
 def process_restaurant(restaurant, count_lock, completed_count_list, total_count):
     distance_threshold_m = 300
 
@@ -336,9 +362,6 @@ def process_restaurant(restaurant, count_lock, completed_count_list, total_count
 
         # Füge Spalte für gestohlene Waffen hinzu (NaN ersetzen)
         nearby["gun_stolen"] = nearby["gun_stolen"].fillna("Unknown")
-
-        if len(nearby) == 0:
-            return None
 
         if "geometry" in nearby.columns:
             nearby.drop(columns=["geometry"], inplace=True)
@@ -382,7 +405,6 @@ def process_restaurant(restaurant, count_lock, completed_count_list, total_count
         return None
 
 # Nutze alle verfügbaren Threads
-summary_data = []
 num_threads = multiprocessing.cpu_count()
 with ThreadPoolExecutor(max_workers=num_threads) as executor:
     futures = [
@@ -392,13 +414,21 @@ with ThreadPoolExecutor(max_workers=num_threads) as executor:
     for future in as_completed(futures):
         result = future.result()
         if result:
-            summary_data.append(result)
+            if result["num_incidents"] > 0:
+                summary_data_with_incidents.append(result)
+            else:
+                summary_data_without_incidents.append(result)
 
 # Waffengewalt auswerten
 
 # DataFrame für Übersichtstabelle
-summary_path = path2 + "\\gun_violence_at_restaurant_results.xlsx"
-summary_df = pd.DataFrame(summary_data)
+summary_path_with_incidents = path2 + "\\gun_violence_at_restaurant_results_with_incidents.xlsx"
+summary_df_with_incidents = pd.DataFrame(summary_data_with_incidents)
+
+summary_df_without_incidents = pd.DataFrame(summary_data_without_incidents)
+summary_path_without_incidents = path2 + "\\gun_violence_at_restaurant_results_without_incidents.xlsx"
+summary_df_without_incidents.to_excel(summary_path_without_incidents, index=False)
+print("✔ gun_violence_at_restaurant_results_without_incidents.xlsx gespeichert.")
 
 # Neue Spalte: Anzahl gestohlener Waffen (außer "Unknown")
 def count_stolen_weapons(gun_dict):
@@ -406,13 +436,13 @@ def count_stolen_weapons(gun_dict):
         return 0
     return sum(v for k, v in gun_dict.items() if k.lower() not in ["unknown", ""])
 
-summary_df["num_stolen_weapons"] = summary_df["gun_stolen_counts"].apply(count_stolen_weapons)
+summary_df_with_incidents["num_stolen_weapons"] = summary_df_with_incidents["gun_stolen_counts"].apply(count_stolen_weapons)
 
 # Gesamtergebnis zwischenspeichern
-summary_df.to_excel(summary_path, index=False)
+summary_df_with_incidents.to_excel(summary_path_with_incidents, index=False)
 
 # Sortiere nach den gewünschten Kriterien
-top10 = summary_df.sort_values(
+top10 = summary_df_with_incidents.sort_values(
     by=["num_incidents", "total_killed", "total_injured", "num_stolen_weapons"],
     ascending=[False, False, False, False]
 ).head(10)
@@ -433,7 +463,7 @@ plt.tight_layout()
 plt.show()
 
 # Sortiere nach den gewünschten Kriterien
-top10 = summary_df.sort_values(
+top10 = summary_df_with_incidents.sort_values(
     by=["total_killed", "total_injured", "num_stolen_weapons", "num_incidents"],
     ascending=[False, False, False, False]
 ).head(10)
@@ -448,7 +478,7 @@ plt.tight_layout()
 plt.show()
 
 # Sortiere nach den gewünschten Kriterien
-top10 = summary_df.sort_values(
+top10 = summary_df_with_incidents.sort_values(
     by=["total_injured", "num_stolen_weapons", "num_incidents", "total_killed"],
     ascending=[False, False, False, False]
 ).head(10)
@@ -467,28 +497,7 @@ plt.show()
 # Entferne Zeilen mit fehlenden Werten in den interessierenden Spalten
 df_gun_clean = df_gun.dropna(subset=["gun_type", "gun_stolen"])
 
-# Hilfsfunktion
-def extract_entries(entry):
-    return [item.split("::")[1].strip() if "::" in item else item.strip()
-            for item in str(entry).split("||")]
-
-# 🔍 Mapping von konkreten Waffentypen zu Kategorien
-def classify_gun_type(gun):
-    gun = gun.lower()
-    if "handgun" in gun or "pistol" in gun or "revolver" in gun:
-        return "Handgun"
-    elif "rifle" in gun or "ak" in gun or "ar-" in gun or "7.62" in gun or "carbine" in gun:
-        return "Rifle"
-    elif "shotgun" in gun:
-        return "Shotgun"
-    elif "bb gun" in gun or "air" in gun:
-        return "Airgun"
-    elif "unknown" in gun:
-        return "Unknown"
-    else:
-        return "Other"
-
-# === Alle Kombinationen extrahieren ===
+# === Alle Kombinationen an Waffentypen extrahieren ===
 type_list, stolen_list, classified_list = [], [], []
 
 for _, row in df_gun_clean.iterrows():
@@ -548,21 +557,34 @@ plt.pie(df_types, labels=df_types.index, autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung der Waffentypen (gun_type)")
 plt.show()
 
-# Heatmap USA mit Restaurantvorfällen (Farben grün-gelb-rot je nach Anzahl)
-# Erzeuge GeoDataFrame mit korrekten Koordinaten
-geometry = [Point(xy) for xy in zip(summary_df["restaurant_longitude"], summary_df["restaurant_latitude"])]
-gdf = geopandas.GeoDataFrame(summary_df, geometry=geometry, crs="EPSG:4326").to_crs(epsg=3857)
+# GeoDataFrame mit Projektion
+# GeoDataFrame für Restaurants mit Vorfällen
+geometry_with_incidents = [Point(xy) for xy in zip(summary_df_with_incidents["restaurant_longitude"], summary_df_with_incidents["restaurant_latitude"])]
+# GeoDataFrame für Restaurants ohne Vorfälle
+geometry_without_incidents = [Point(xy) for xy in zip(summary_df_without_incidents["restaurant_longitude"], summary_df_without_incidents["restaurant_latitude"])]
 
-# Farbskala und Normalisierung
-incident_counts = gdf["num_incidents"]
+gdf_with_incidents = geopandas.GeoDataFrame(summary_df_with_incidents, geometry=geometry_with_incidents, crs="EPSG:4326").to_crs(epsg=3857)
+gdf_without_incidents = geopandas.GeoDataFrame(summary_df_without_incidents, geometry=geometry_without_incidents, crs="EPSG:4326").to_crs(epsg=3857)
+
+# Vorfallszahlen und modifizierte Normalisierung (exponentiell sensitiv)
+incident_counts = gdf_with_incidents["num_incidents"]
 max_incidents = incident_counts.max()
+
+# Transformation: z. B. log oder sqrt für empfindlicheren Verlauf
+# Hier: sqrt → empfindlich bei niedrigen Werten, langsam bei hohen
+transformed = np.sqrt(incident_counts)
+max_trans = np.sqrt(max_incidents)
+
+# Farbverlauf grün → gelb → rot
 cmap = mathcolors.LinearSegmentedColormap.from_list("custom_green_red", ["green", "yellow", "red"])
-norm = mathcolors.Normalize(vmin=0, vmax=max_incidents)
+norm = mathcolors.Normalize(vmin=0, vmax=max_trans)
 colors = [cmap(norm(x)) for x in incident_counts]
 
 # Plot mit Basiskarte (z. B. OpenStreetMap)
 fig, ax = plt.subplots(figsize=(20, 15))
-gdf.plot(ax=ax, color=colors, markersize=20, alpha=0.7)
+# Zeichne blaue Punkte für Restaurants ohne Vorfälle
+gdf_without_incidents.plot(ax=ax, color="blue", markersize=10, alpha=0.5)
+gdf_with_incidents.plot(ax=ax, color=colors, markersize=20, alpha=0.7)
 ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
 
 ax.set_title("US Map of Gun Violence at Restaurants (Color = #Incidents)")
