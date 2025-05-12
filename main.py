@@ -106,7 +106,14 @@ merged_df = pd.concat([df2, new_unique], ignore_index=True)
 # Spalte aktualisieren
 merged_df['primaryCategories'] = merged_df.apply(fill_primary_categories, axis=1)
 merged_df.drop(columns=['primaryCategories_x', 'primaryCategories_y', '_merge'], inplace=True)
-df_unique = merged_df.drop_duplicates(subset=['id', 'address', 'categories', 'city', 'country', 'latitude', 'longitude', 'name', 'postalCode', 'country', 'province', 'websites', 'primaryCategories', 'sourceURLs'], keep='first')
+df_unique = merged_df.drop_duplicates(
+    subset=[
+        'id', 'address', 'categories', 'city', 'country',
+        'latitude', 'longitude', 'name', 'postalCode',
+        'country', 'province', 'websites', 'primaryCategories', 'sourceURLs'
+    ],
+    keep='first'
+).copy()
 
 # Ausgabe der Spaltennamen (zur Kontrolle)
 print("Neue Zeilen aus Datei 1:", len(df_unique))
@@ -130,17 +137,16 @@ us_states = {
     'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia'
 }
 
-df_unique = df_unique.copy()
-df_unique['province'] = df_unique['province'].map(us_states).fillna(df_unique['province'])
+# Staaten-Kürzel ersetzen
+df_unique.loc[:, 'province'] = df_unique['province'].map(us_states).fillna(df_unique['province'])
 
-# Zeitformate anpassen
-df_unique['dateAdded'] = pd.to_datetime(df_unique['dateAdded'], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce')
-df_unique['dateUpdated'] = pd.to_datetime(df_unique['dateUpdated'], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce')
+# Zeitformate konvertieren
+df_unique['dateAdded'] = pd.to_datetime(df_unique['dateAdded'], errors='coerce')
+df_unique['dateUpdated'] = pd.to_datetime(df_unique['dateUpdated'], errors='coerce')
 
-# Dann ins gewünschte Format konvertieren
-df_unique['dateAdded'] = df_unique['dateAdded'].dt.strftime('%Y-%m-%d %H:%M:%S')
-df_unique['dateUpdated'] = df_unique['dateUpdated'].dt.strftime('%Y-%m-%d %H:%M:%S')
-
+#Formatierung
+df_unique['dateAdded'] = df_unique['dateAdded'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(x) else "")
+df_unique['dateUpdated'] = df_unique['dateUpdated'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(x) else "")
 # Name normalization
 def normalize_name(name):
     if pd.isna(name):
@@ -149,7 +155,8 @@ def normalize_name(name):
     name = name.lower()
     return name.capitalize()  # Nur erster Buchstabe groß
 
-df_unique['name'] = df_unique['name'].astype(str).map(normalize_name)
+# Namen normalisieren
+df_unique.loc[:, 'name'] = df_unique['name'].astype(str).map(normalize_name)
 
 # 4. Optional: Ergebnis speichern
 df_unique.to_csv(path+"\\fast_food_vereint_ohne_duplikate.csv", index=False)
