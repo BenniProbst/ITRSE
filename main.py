@@ -532,6 +532,7 @@ plt.figure(figsize=(10, 10))
 df_comb["gun_stolen"].value_counts().plot.pie(autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung Waffenstatus (gun_stolen)")
 plt.ylabel("")
+plt.tight_layout(pad=2.0)
 plt.show()
 
 # === Kuchendiagramm 2: Klassifizierte Waffentypen ===
@@ -539,26 +540,39 @@ plt.figure(figsize=(10, 10))
 df_comb["gun_class"].value_counts().plot.pie(autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung klassifizierter Waffentypen")
 plt.ylabel("")
-plt.tight_layout()
+plt.tight_layout(pad=2.0)
 plt.show()
 
-# Piechart für gun_stolen (nur diese Spalte)
+def collapse_small_entries(series, threshold=0.002):
+    total = series.sum()
+    proportions = series / total
+    large = series[proportions >= threshold]
+    small = series[proportions < threshold]
+    if not small.empty:
+        large["Other"] = small.sum()
+    return large
+
+# Piechart for gun_stolen
 stolen_all = []
 for entry in df_gun_clean["gun_stolen"]:
     stolen_all.extend(extract_entries(entry))
 
 df_stolen = pd.Series(stolen_all).value_counts()
+df_stolen = collapse_small_entries(df_stolen)
+
 plt.figure(figsize=(18, 18))
 plt.pie(df_stolen, labels=df_stolen.index, autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung des Waffenstatus (gun_stolen)")
 plt.show()
 
-# Piechart für gun_type (nur diese Spalte)
+# Piechart for gun_type
 type_all = []
 for entry in df_gun_clean["gun_type"]:
     type_all.extend(extract_entries(entry))
 
 df_types = pd.Series(type_all).value_counts()
+df_types = collapse_small_entries(df_types)
+
 plt.figure(figsize=(18, 18))
 plt.pie(df_types, labels=df_types.index, autopct='%1.1f%%', startangle=140)
 plt.title("Verteilung der Waffentypen (gun_type)")
@@ -587,7 +601,7 @@ norm = mathcolors.Normalize(vmin=0, vmax=max_trans)
 colors = [cmap(norm(x)) for x in transformed]  # benutze transformierte Werte für Farbe
 
 # Plot
-fig, ax = plt.subplots(figsize=(20, 15))
+fig, ax = plt.subplots(figsize=(20, 20), constrained_layout=True)
 gdf_without_incidents.plot(ax=ax, color="blue", markersize=10, alpha=0.5)
 gdf_with_incidents.plot(ax=ax, color=colors, markersize=20, alpha=0.7)
 ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
